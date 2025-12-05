@@ -68,15 +68,7 @@ const ws281x = {
 const PIXELS_PER_LETTER = 5
 const BOARD_WIDTH = 32
 const BOARD_HEIGHT = 8
-const END_POINT_PERMISSIONS = {
-	'/api/fill': 'lights',
-	'/api/gradient': 'lights',
-	'/api/setPixel': 'lights',
-	'/api/setPixels': 'lights',
-	'/api/say': 'lights',
-	'/api/getSounds': 'sounds',
-	'/api/playSound': 'sounds'
-}
+const REQUIRED_PERMISSION = 'auxiliary'
 
 const maxPixels = config.barPixels + config.boards * BOARD_WIDTH * BOARD_HEIGHT
 // formPix end
@@ -462,7 +454,6 @@ function displayBoard(string, textColor, backgroundColor, startColumn = 0, endCo
 		}
 	} else {
 		// If the board pixels don't fit on the board
-
 		// Add 2 spaces to the beginning of the board pixels
 		for (let i = 0; i < 2 * 6 + 1; i++) {
 			boardPixels.unshift([0, 0, 0, 0, 0, 0, 0, 0]);
@@ -591,12 +582,7 @@ app.use(async (req, res, next) => {
 			return
 		}
 
-		if (!END_POINT_PERMISSIONS[urlPath]) {
-			res.status(404).json({ error: `The endpoint ${urlPath} does not exist in the permissions` })
-			return
-		}
-
-		let response = await fetch(`${config.formbarUrl}/api/apiPermissionCheck?api=${apiKey}&permissionType=${END_POINT_PERMISSIONS[urlPath]}&classId=${classId}`, {
+		let response = await fetch(`${config.formbarUrl}/api/apiPermissionCheck?api=${apiKey}&permissionType=${REQUIRED_PERMISSION}&classId=${classId}`, {
 			method: 'GET',
 			headers: {
 				api: config.api
@@ -1068,6 +1054,17 @@ socket.on('classUpdate', (classroomData) => {
 		return
 	}
 
+    // Normalize responses to array format for consistent iteration
+    const getResponsesArray = () => {
+        if (Array.isArray(newPollData.responses)) {
+            return newPollData.responses
+        } else {
+            return Object.values(newPollData.responses)
+        }
+    }
+
+    const responsesArray = getResponsesArray()
+
 	// Count total poll responses
 	for (let poll of Object.values(newPollData.responses)) {
 		pollResponses += poll.responses
@@ -1084,46 +1081,58 @@ socket.on('classUpdate', (classroomData) => {
 
 		// If total students equals poll responses, play specific sounds and display messages based on the prompt
 		if (pollResponses == newPollData.totalResponders && pollResponses > 0 && !newPollData.multiRes) {
-			blind = false
+            blind = false
 
-			if (newPollData.prompt == 'Thumbs?') {
-				fill(0x000000, config.barPixels)
+            if (newPollData.prompt == 'Thumbs?') {
+                fill(0x000000, config.barPixels)
 
-				if (newPollData.responses.Up.responses == newPollData.totalResponders) {
-					gradient(0x0000FF, 0xFF0000, 0, config.barPixels)
-					let display = displayBoard('Max Gamer', 0x00FF00, 0x000000)
-					if (!display) return
-					boardIntervals.push(display)
-					player.play('./sfx/sfx_success01.wav')
+                // Helper function to find response by answer text
+                const findResponse = (answerText) => {
+                    return responsesArray.find(r => r.answer === answerText)
+                }
 
-					specialDisplay = true
+                const upResponses = findResponse('Up')
+                if (upResponses && upResponses.responses == newPollData.totalResponders) {
+                    gradient(0x0000FF, 0xFF0000, 0, config.barPixels)
+                    let display = displayBoard('Max Gamer', 0x00FF00, 0x000000)
+                    if (!display) return
+                    boardIntervals.push(display)
+                    player.play('./sfx/sfx_success01.wav')
 
-					return
-				} else if (newPollData.responses.Wiggle.responses == newPollData.totalResponders) {
-					player.play('./sfx/bruh.wav')
+                    specialDisplay = true
 
-					let text = [
-						'Wiggle Nation: Where democracy meets indecision!',
-						'Wiggle-o-mania: The cure for decision-making paralysis!'
-					]
+                    return
+                }
 
-					text = text[Math.floor(Math.random() * text.length)]
+                const wiggleResponse = findResponse('Wiggle')
+                if (wiggleResponse && wiggleResponse.responses == newPollData.totalResponders) {
+                    player.play('./sfx/bruh.wav')
 
-					let display = displayBoard(text, 0x00FFFF, 0x000000)
-					if (!display) return
-					boardIntervals.push(display)
+                    let text = [
+                        'Wiggle Nation: Where democracy meets indecision!',
+                        'Wiggle-o-mania: The cure for decision-making paralysis!'
+                    ]
 
-					specialDisplay = true
-				} else if (newPollData.responses.Down.responses == newPollData.totalResponders) {
-					player.play('./sfx/wompwomp.wav')
-					let display = displayBoard('Git Gud', 0xFF0000, 0x000000)
-					if (!display) return
-					boardIntervals.push(display)
+                    text = text[Math.floor(Math.random() * text.length)]
 
-					specialDisplay = true
-				}
-			}
-		}
+                    let display = displayBoard(text, 0x00FFFF, 0x000000)
+                    if (!display) return
+                    boardIntervals.push(display)
+
+                    specialDisplay = true
+                }
+
+                const downResponse = findResponse('Down')
+                if (downResponse && downResponse.responses == newPollData.totalResponders) {
+                    player.play('./sfx/wompwomp.wav')
+                    let display = displayBoard('Git Gud', 0xFF0000, 0x000000)
+                    if (!display) return
+                    boardIntervals.push(display)
+
+                    specialDisplay = true
+                }
+            }
+        }
 
 		// Count non-empty polls
 		let nonEmptyPolls = -1
@@ -1160,15 +1169,6 @@ socket.on('classUpdate', (classroomData) => {
 				// Set response to color
 				fill(color, currentPixel, pixelsPerStudent)
 				currentPixel += pixelsPerStudent
-
-				// Set spacers
-				if (
-					responseNumber < poll.responses - 1 ||
-					pollNumber < nonEmptyPolls
-				) {
-					pixels[currentPixel] = 0xFF0080
-					currentPixel++
-				}
 			}
 
 			// If not in blind mode and there are responses, increment current pixel
