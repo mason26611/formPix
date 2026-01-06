@@ -10,7 +10,12 @@ const { letters } = require('../letters.js')
 
 // If the bgm folder does not exist, create it
 if (!fs.existsSync('bgm')) {
-    fs.mkdirSync('bgm')
+	fs.mkdirSync('bgm')
+}
+
+// If the sfx folder does not exist, create it
+if (!fs.existsSync('sfx')) {
+	fs.mkdirSync('sfx')
 }
 
 // Setup
@@ -589,16 +594,16 @@ app.use(async (req, res, next) => {
 			}
 		});
 
-		// Check if the response status is not 200
-		// If a user is not allowed to access the endpoint, this will also be triggered
-		if (response.status != 200) {
-			res.status(response.status).json({ message: response.statusText })
-			return
-		}
-
 		let data = await response.json();
 		if (data.error) {
 			res.status(response.status).json({ status: data.error })
+			return
+		}
+
+		// Check if the response status is not 200
+		// If there was a problem that did not have an error message, this will trigger
+		if (response.status !== 200) {
+			res.status(response.status).json({ message: response.statusText, data })
 			return
 		}
 
@@ -891,7 +896,7 @@ app.post('/api/say', (req, res) => {
 	}
 })
 
-app.post('/api/getSounds', (req, res) => {
+app.get('/api/getSounds', (req, res) => {
 	try {
 		let type = req.query.type
 
@@ -1030,7 +1035,7 @@ socket.on('setClass', (userClassId) => {
 
 socket.on('classUpdate', (classroomData) => {
 	const newPollData = classroomData.poll
-    let pixelsPerStudent
+	let pixelsPerStudent
 	let text = ''
 	let pollText = 'Poll'
 	let pollResponses = 0
@@ -1054,16 +1059,16 @@ socket.on('classUpdate', (classroomData) => {
 		return
 	}
 
-    // Normalize responses to array format for consistent iteration
-    const getResponsesArray = () => {
-        if (Array.isArray(newPollData.responses)) {
-            return newPollData.responses
-        } else {
-            return Object.values(newPollData.responses)
-        }
-    }
+	// Normalize responses to array format for consistent iteration
+	const getResponsesArray = () => {
+		if (Array.isArray(newPollData.responses)) {
+			return newPollData.responses
+		} else {
+			return Object.values(newPollData.responses)
+		}
+	}
 
-    const responsesArray = getResponsesArray()
+	const responsesArray = getResponsesArray()
 
 	// Count total poll responses
 	for (let poll of Object.values(newPollData.responses)) {
@@ -1081,58 +1086,58 @@ socket.on('classUpdate', (classroomData) => {
 
 		// If total students equals poll responses, play specific sounds and display messages based on the prompt
 		if (pollResponses == newPollData.totalResponders && pollResponses > 0 && !newPollData.multiRes) {
-            blind = false
+			blind = false
 
-            if (newPollData.prompt == 'Thumbs?') {
-                fill(0x000000, config.barPixels)
+			if (newPollData.prompt == 'Thumbs?') {
+				fill(0x000000, config.barPixels)
 
-                // Helper function to find response by answer text
-                const findResponse = (answerText) => {
-                    return responsesArray.find(r => r.answer === answerText)
-                }
+				// Helper function to find response by answer text
+				const findResponse = (answerText) => {
+					return responsesArray.find(r => r.answer === answerText)
+				}
 
-                const upResponses = findResponse('Up')
-                if (upResponses && upResponses.responses == newPollData.totalResponders) {
-                    gradient(0x0000FF, 0xFF0000, 0, config.barPixels)
-                    let display = displayBoard('Max Gamer', 0x00FF00, 0x000000)
-                    if (!display) return
-                    boardIntervals.push(display)
-                    player.play('./sfx/sfx_success01.wav')
+				const upResponses = findResponse('Up')
+				if (upResponses && upResponses.responses == newPollData.totalResponders) {
+					gradient(0x0000FF, 0xFF0000, 0, config.barPixels)
+					let display = displayBoard('Max Gamer', 0x00FF00, 0x000000)
+					if (!display) return
+					boardIntervals.push(display)
+					player.play('./sfx/sfx_success01.wav')
 
-                    specialDisplay = true
+					specialDisplay = true
 
-                    return
-                }
+					return
+				}
 
-                const wiggleResponse = findResponse('Wiggle')
-                if (wiggleResponse && wiggleResponse.responses == newPollData.totalResponders) {
-                    player.play('./sfx/bruh.wav')
+				const wiggleResponse = findResponse('Wiggle')
+				if (wiggleResponse && wiggleResponse.responses == newPollData.totalResponders) {
+					player.play('./sfx/bruh.wav')
 
-                    let text = [
-                        'Wiggle Nation: Where democracy meets indecision!',
-                        'Wiggle-o-mania: The cure for decision-making paralysis!'
-                    ]
+					let text = [
+						'Wiggle Nation: Where democracy meets indecision!',
+						'Wiggle-o-mania: The cure for decision-making paralysis!'
+					]
 
-                    text = text[Math.floor(Math.random() * text.length)]
+					text = text[Math.floor(Math.random() * text.length)]
 
-                    let display = displayBoard(text, 0x00FFFF, 0x000000)
-                    if (!display) return
-                    boardIntervals.push(display)
+					let display = displayBoard(text, 0x00FFFF, 0x000000)
+					if (!display) return
+					boardIntervals.push(display)
 
-                    specialDisplay = true
-                }
+					specialDisplay = true
+				}
 
-                const downResponse = findResponse('Down')
-                if (downResponse && downResponse.responses == newPollData.totalResponders) {
-                    player.play('./sfx/wompwomp.wav')
-                    let display = displayBoard('Git Gud', 0xFF0000, 0x000000)
-                    if (!display) return
-                    boardIntervals.push(display)
+				const downResponse = findResponse('Down')
+				if (downResponse && downResponse.responses == newPollData.totalResponders) {
+					player.play('./sfx/wompwomp.wav')
+					let display = displayBoard('Git Gud', 0xFF0000, 0x000000)
+					if (!display) return
+					boardIntervals.push(display)
 
-                    specialDisplay = true
-                }
-            }
-        }
+					specialDisplay = true
+				}
+			}
+		}
 
 		// Count non-empty polls
 		let nonEmptyPolls = -1
@@ -1151,10 +1156,10 @@ socket.on('classUpdate', (classroomData) => {
 		// Calculate pixels per response, considering non-empty polls
 		if (newPollData.multiRes) {
 			if (newPollData.totalResponders <= 0) pixelsPerStudent = 0
-			else pixelsPerStudent = Math.floor((config.barPixels - nonEmptyPolls) / totalResponses / newPollData.totalResponders) - 1
+			else pixelsPerStudent = Math.ceil((config.barPixels - nonEmptyPolls) / totalResponses / newPollData.totalResponders)
 		} else {
 			if (newPollData.totalResponders <= 0) pixelsPerStudent = 0
-			else pixelsPerStudent = Math.floor((config.barPixels - nonEmptyPolls) / newPollData.totalResponders) - 1
+			else pixelsPerStudent = Math.ceil((config.barPixels - nonEmptyPolls) / newPollData.totalResponders)
 		}
 
 		// Add polls to the display
@@ -1169,6 +1174,14 @@ socket.on('classUpdate', (classroomData) => {
 				// Set response to color
 				fill(color, currentPixel, pixelsPerStudent)
 				currentPixel += pixelsPerStudent
+
+				// Set spacers
+				if (
+					responseNumber < poll.responses - 1 ||
+					pollNumber < nonEmptyPolls
+				) {
+					pixels[currentPixel] = 0xFF0080
+				}
 			}
 
 			// If not in blind mode and there are responses, increment current pixel

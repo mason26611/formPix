@@ -9,22 +9,19 @@ const player = require('play-sound')({ player: 'omxplayer' })
 
 // If the bgm folder does not exist, create it
 if (!fs.existsSync('bgm')) {
-    fs.mkdirSync('bgm')
+	fs.mkdirSync('bgm')
+}
+
+// If the sfx folder does not exist, create it
+if (!fs.existsSync('sfx')) {
+	fs.mkdirSync('sfx')
 }
 
 // Constants
 const PIXELS_PER_LETTER = 5
 const BOARD_WIDTH = 32
 const BOARD_HEIGHT = 8
-const END_POINT_PERMISSIONS = {
-	'/api/fill': 'lights',
-	'/api/gradient': 'lights',
-	'/api/setPixel': 'lights',
-	'/api/setPixels': 'lights',
-	'/api/say': 'lights',
-	'/api/getSounds': 'sounds',
-	'/api/playSound': 'sounds'
-}
+const REQUIRED_PERMISSION = 'auxiliary'
 
 
 // Config
@@ -554,29 +551,22 @@ app.use(async (req, res, next) => {
 			urlPath = urlPath.slice(0, urlPath.length - 1)
 		}
 
+		if (urlPath == '' || urlPath == 'socket.io/socket.io.js') {
+			next()
+			return
+		}
+
 		if (!apiKey) {
 			res.status(400).json({ error: 'Missing API key' })
 			return
 		}
 
-		if (!END_POINT_PERMISSIONS[urlPath]) {
-			res.status(404).json({ error: 'Endpoint does not exist in the permissions' })
-			return
-		}
-
-		let response = await fetch(`${config.formbarUrl}/api/apiPermissionCheck?api=${apiKey}&permissionType=${END_POINT_PERMISSIONS[urlPath]}&classId=${classId}`, {
+		let response = await fetch(`${config.formbarUrl}/api/apiPermissionCheck?api=${apiKey}&permissionType=${REQUIRED_PERMISSION}&classId=${classId}`, {
 			method: 'GET',
 			headers: {
 				api: config.api
 			}
 		});
-
-		// Check if the response status is not 200
-		// If a user is not allowed to access the endpoint, this will also be triggered
-		if (response.status != 200) {
-			res.status(response.status).json({ message: response.statusText })
-			return
-		}
 
 		let data = await response.json();
 		if (data.error) {
@@ -584,9 +574,16 @@ app.use(async (req, res, next) => {
 			return
 		}
 
+		// Check if the response status is not 200
+		// If there was a problem that did not have an error message, this will trigger
+		if (response.status !== 200) {
+			res.status(response.status).json({ message: response.statusText, data })
+			return
+		}
+
 		next()
 	} catch (err) {
-		res.status(500).json({ error: err.message })
+		res.status(500).json({ error: 'There was a server error try again' })
 		return
 	}
 })
@@ -637,13 +634,6 @@ app.post('/api/fill', (req, res) => {
 		start = Number(start)
 		length = Number(length)
 
-		// If textInterval exists and start + length is greater than the total bar pixels, clear the interval and fill the bar with black color
-		// if (textInterval && start + length > config.barPixels) {
-		// 	clearInterval(textInterval)
-		// 	textInterval = null
-		// 	fill(0x000000, config.barPixels)
-		// }
-
 		// Fill the bar with the specified color, start, and length
 		fill(color, start, length)
 
@@ -653,7 +643,7 @@ app.post('/api/fill', (req, res) => {
 		res.status(200).json({ message: 'ok' })
 	} catch (err) {
 		// If any error occurs, send a 500 status code with 'error' as the response
-		res.status(500).json({ error: err.message })
+		res.status(500).json({ error: 'There was a server error try again' })
 	}
 })
 
@@ -663,6 +653,15 @@ app.post('/api/gradient', (req, res) => {
 		// Destructure color, start, and length from the request query
 		// If start and length are not provided, default values are set
 		let { startColor, endColor, start = 0, length = pixels.length } = req.query
+
+		if (!startColor) {
+			res.status(400).json({ error: 'missing startColor' })
+			return
+		}
+		if (!endColor) {
+			res.status(400).json({ error: 'missing endColor' })
+			return
+		}
 
 		// Convert the startColor text to hexadecimal color
 		startColor = textToHexColor(startColor)
@@ -701,13 +700,6 @@ app.post('/api/gradient', (req, res) => {
 		start = Number(start)
 		length = Number(length)
 
-		// If textInterval exists and start + length is greater than the total bar pixels, clear the interval and fill the bar with black color
-		// if (textInterval && start + length > config.barPixels) {
-		// 	clearInterval(textInterval)
-		// 	textInterval = null
-		// 	fill(0x000000, config.barPixels)
-		// }
-
 		// Fill the bar with the specified startColor, start, and length
 		gradient(startColor, endColor, start, length)
 		// Render the changes
@@ -716,7 +708,7 @@ app.post('/api/gradient', (req, res) => {
 		res.status(200).json({ message: 'ok' })
 	} catch (err) {
 		// If any error occurs, send a 500 status code with 'error' as the response
-		res.status(500).json({ error: err.message })
+		res.status(500).json({ error: 'There was a server error try again' })
 	}
 })
 
@@ -746,13 +738,6 @@ app.post('/api/setPixel', (req, res) => {
 		}
 		if (pixelNumber instanceof Error) throw pixelNumber
 
-		// If textInterval exists and pixelNumber is greater than or equal to the number of bar pixels, clear the interval and fill the bar with black color
-		// if (textInterval && pixelNumber >= config.barPixels) {
-		// 	clearInterval(textInterval);
-		// 	textInterval = null;
-		// 	fill(0x000000, config.barPixels);
-		// }
-
 		// Set the specified pixel with the specified color
 		pixels[pixelNumber] = color
 
@@ -763,7 +748,7 @@ app.post('/api/setPixel', (req, res) => {
 		res.status(200).json({ message: 'ok' })
 	} catch (err) {
 		// If an error occurs, send a 500 response with 'error'
-		res.status(500).json({ error: err.message })
+		res.status(500).json({ error: 'There was a server error try again' })
 	}
 })
 
@@ -816,24 +801,9 @@ app.post('/api/setPixels', (req, res) => {
 			}
 			if (pixelNumber instanceof Error) throw pixelNumber
 
-			// If textInterval exists and pixelNumber is greater than or equal to the number of bar pixels, clear the pixels on the board
-			// if (textInterval && pixelNumber >= config.barPixels && !changedBoard) {
-			// 	changedBoard = true
-
-			// 	for (let i = config.barPixels; i < tempPixels.length; i++) {
-			// 		tempPixels[i] = 0x000000
-			// 	}
-			// }
-
 			// Set the specified pixel with the specified color
 			tempPixels[pixelNumber] = color
 		}
-
-		// If the board has been changed, clear the text interval
-		// if (changedBoard) {
-		// 	clearInterval(textInterval);
-		// 	textInterval = null;
-		// }
 
 		// Set the pixels array with the tempPixels array
 		pixels.set(tempPixels)
@@ -844,8 +814,9 @@ app.post('/api/setPixels', (req, res) => {
 		// Send a 200 response with 'ok'
 		res.status(200).json({ message: 'ok' })
 	} catch (err) {
+		console.log(err);
 		// If an error occurs, send a 500 response with 'error'
-		res.status(500).json({ error: err.message })
+		res.status(500).json({ error: 'There was a server error try again' })
 	}
 })
 
@@ -885,17 +856,21 @@ app.post('/api/say', (req, res) => {
 		}
 		if (backgroundColor instanceof Error) throw backgroundColor
 
-		// Call the displayBoard function with the text, textColor, and backgroundColor to display the text with the specified colors
-		displayBoard(text, textColor, backgroundColor)
-		// Send a 200 response with 'ok' to indicate successful operation
+		let display = displayBoard(text, textColor, backgroundColor)
+		if (!display) {
+			res.status(500).json({ error: 'There was a server error try again' })
+			return
+		}
+		boardIntervals.push(display)
+
 		res.status(200).json({ message: 'ok' })
 	} catch (err) {
 		// If an error occurs, send a 500 response with 'error'
-		res.status(500).json({ error: err.message })
+		res.status(500).json({ error: 'There was a server error try again' })
 	}
 })
 
-app.get('/api/getSounds', (req, res) => {
+app.post('/api/getSounds', (req, res) => {
 	try {
 		let type = req.query.type
 
@@ -905,7 +880,7 @@ app.get('/api/getSounds', (req, res) => {
 		else res.status(400).json({ error: 'Invalid type' })
 	} catch (err) {
 		// If an error occurs, send a 500 response with 'error'
-		res.status(500).json({ error: err.message })
+		res.status(500).json({ error: 'There was a server error try again' })
 	}
 })
 
@@ -919,14 +894,13 @@ app.post('/api/playSound', (req, res) => {
 			let status = 400
 			if (sound.endsWith(' does not exist.')) status = 404
 
-			res.status(status).json({ error: sound })
-		} else if (sound == true) {
-			res.status(200).json({ message: 'ok' })
-		}
-		else res.status(500).json({ error: err.message })
+			res.status(400).json({ error: sound })
+		} else if (sound == true) res.status(200).json({ message: 'ok' })
+		else res.status(500).json({ error: 'There was a server error try again' })
 	} catch (err) {
 		// If an error occurs, send a 500 response with 'error'
-		res.status(500).json({ error: err.message })
+		console.log(err);
+		res.status(500).json({ error: 'There was a server error try again' })
 	}
 })
 
@@ -945,9 +919,9 @@ app.use((req, res, next) => {
 			urlPath = urlPath.slice(0, urlPath.indexOf('?'))
 		}
 
-		res.status(404).json({ error: `The page ${urlPath} does not exist` })
+		res.status(404).json({ error: `The endpoint ${urlPath} does not exist` })
 	} catch (err) {
-		res.status(500).json({ error: err.message })
+		res.status(500).json({ error: 'There was a server error try again' })
 	}
 })
 
@@ -1021,7 +995,7 @@ socket.on('setClass', (userClassId) => {
 })
 
 socket.on('classUpdate', (classroomData) => {
-    const newPollData = classroomData.poll
+	const newPollData = classroomData.poll
 	let pixelsPerStudent
 	let text = ''
 	let pollText = 'Poll'
@@ -1058,7 +1032,7 @@ socket.on('classUpdate', (classroomData) => {
 	const responsesArray = getResponsesArray()
 
 	// Count total poll responses
-	for (let poll of responsesArray) {
+	for (let poll of Object.values(newPollData.responses)) {
 		pollResponses += poll.responses
 	}
 
@@ -1067,7 +1041,7 @@ socket.on('classUpdate', (classroomData) => {
 		fill(0x808080, 0, config.barPixels)
 
 		// Convert colors from hex to integers for each poll
-		for (let poll of responsesArray) {
+		for (let poll of Object.values(newPollData.responses)) {
 			poll.color = parseInt(poll.color.slice(1), 16)
 		}
 
@@ -1083,8 +1057,8 @@ socket.on('classUpdate', (classroomData) => {
 					return responsesArray.find(r => r.answer === answerText)
 				}
 
-				const upResponse = findResponse('Up')
-				if (upResponse && upResponse.responses == newPollData.totalResponders) {
+				const upResponses = findResponse('Up')
+				if (upResponses && upResponses.responses == newPollData.totalResponders) {
 					gradient(0x0000FF, 0xFF0000, 0, config.barPixels)
 					let display = displayBoard('Max Gamer', 0x00FF00, 0x000000)
 					if (!display) return
@@ -1128,7 +1102,7 @@ socket.on('classUpdate', (classroomData) => {
 
 		// Count non-empty polls
 		let nonEmptyPolls = -1
-		for (let poll of responsesArray) {
+		for (let poll of Object.values(newPollData.responses)) {
 			if (poll.responses > 0) {
 				nonEmptyPolls++
 			}
@@ -1136,23 +1110,23 @@ socket.on('classUpdate', (classroomData) => {
 
 		// Add up the total number of responses for each response option
 		let totalResponses = 0
-		for (let poll of responsesArray) {
+		for (let poll of Object.values(newPollData.responses)) {
 			totalResponses += poll.responses
 		}
 
 		// Calculate pixels per response, considering non-empty polls
 		if (newPollData.multiRes) {
 			if (newPollData.totalResponders <= 0) pixelsPerStudent = 0
-			else pixelsPerStudent = Math.floor((config.barPixels - nonEmptyPolls) / totalResponses / newPollData.totalResponders) - 1
+			else pixelsPerStudent = Math.ceil((config.barPixels - nonEmptyPolls) / totalResponses / newPollData.totalResponders)
 		} else {
 			if (newPollData.totalResponders <= 0) pixelsPerStudent = 0
-			else pixelsPerStudent = Math.floor((config.barPixels - nonEmptyPolls) / newPollData.totalResponders) - 1
+			else pixelsPerStudent = Math.ceil((config.barPixels - nonEmptyPolls) / newPollData.totalResponders)
 		}
 
 		// Add polls to the display
 		let currentPixel = 0
 		let pollNumber = 0
-		for (let poll of responsesArray) {
+		for (let poll of Object.values(newPollData.responses)) {
 			// For each response
 			for (let responseNumber = 0; responseNumber < poll.responses; responseNumber++) {
 				let color = poll.color
@@ -1168,7 +1142,6 @@ socket.on('classUpdate', (classroomData) => {
 					pollNumber < nonEmptyPolls
 				) {
 					pixels[currentPixel] = 0xFF0080
-					currentPixel++
 				}
 			}
 
